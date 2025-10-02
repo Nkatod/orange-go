@@ -8,26 +8,53 @@ import (
 	"github.com/labstack/echo/v4"
 
 	healthcheck "orange-go/internal/api/healthcheck"
-	key_value_api "orange-go/internal/api/key"
-	"orange-go/internal/storage"
+	keyapi "orange-go/internal/api/key"
+
 	"orange-go/internal/storage/memory"
+	"orange-go/internal/transactions"
+	tl "orange-go/internal/transactions/logger"
 )
 
-func InitializeHealthCheckAPI(e *echo.Echo) *healthcheck.API {
-	wire.Build(
-		healthcheck.NewAPI,
-	)
-
-	return &healthcheck.API{}
+// Создаем структуру для группировки всех компонентов
+type App struct {
+	HealthcheckAPI    *healthcheck.API
+	KeyAPI            *keyapi.API
+	TransactionLogger transactions.ITransactionLogger
 }
 
-func InitializeKeyValueAPI(e *echo.Echo) *key_value_api.API {
-	wire.Build(
-		// провайдеры зависимостей key.NewAPI:
-		memory.NewMemoryStorage,
-		wire.Bind(new(storage.IMemoryStorage), new(*memory.Storage)), // IMemoryStorage <- *MemoryStorage
+var storageSet = wire.NewSet(
+	memory.NewMemoryStorage, // Убираем wire.Bind, если NewMemoryStorage уже возвращает нужный тип
+)
 
-		key_value_api.NewAPI, // (*echo.Echo, storage.IMemoryStorage) *API
+var txLogSet = wire.NewSet(
+	wire.Value("transaction.log"),
+	tl.NewFileTransactionLogger,
+)
+
+// Провайдер для создания App структуры
+func NewApp(
+	healthAPI *healthcheck.API,
+	keyAPI *keyapi.API,
+	txLogger transactions.ITransactionLogger,
+) *App {
+	return &App{
+		HealthcheckAPI:    healthAPI,
+		KeyAPI:            keyAPI,
+		TransactionLogger: txLogger,
+	}
+}
+
+var appSet = wire.NewSet(
+	NewApp,
+)
+
+func InitializeApp(e *echo.Echo) (*App, error) {
+	wire.Build(
+		storageSet,
+		txLogSet,
+		appSet,
+		healthcheck.NewAPI,
+		keyapi.NewAPI,
 	)
-	return &key_value_api.API{}
+	return nil, nil
 }

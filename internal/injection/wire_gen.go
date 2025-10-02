@@ -7,21 +7,60 @@
 package injection
 
 import (
+	"github.com/google/wire"
 	"github.com/labstack/echo/v4"
 	"orange-go/internal/api/healthcheck"
 	"orange-go/internal/api/key"
 	"orange-go/internal/storage/memory"
+	"orange-go/internal/transactions"
+	"orange-go/internal/transactions/logger"
 )
 
 // Injectors from wire.go:
 
-func InitializeHealthCheckAPI(e *echo.Echo) *healthcheck.API {
+func InitializeApp(e *echo.Echo) (*App, error) {
 	api := healthcheck.NewAPI(e)
-	return api
+	iMemoryStorage := memory.NewMemoryStorage()
+	string2 := _wireStringValue
+	iTransactionLogger, err := logger.NewFileTransactionLogger(string2, iMemoryStorage)
+	if err != nil {
+		return nil, err
+	}
+	keyAPI := key.NewAPI(e, iMemoryStorage, iTransactionLogger)
+	app := NewApp(api, keyAPI, iTransactionLogger)
+	return app, nil
 }
 
-func InitializeKeyValueAPI(e *echo.Echo) *key.API {
-	storage := memory.NewMemoryStorage()
-	api := key.NewAPI(e, storage)
-	return api
+var (
+	_wireStringValue = "transaction.log"
+)
+
+// wire.go:
+
+// Создаем структуру для группировки всех компонентов
+type App struct {
+	HealthcheckAPI    *healthcheck.API
+	KeyAPI            *key.API
+	TransactionLogger transactions.ITransactionLogger
 }
+
+var storageSet = wire.NewSet(memory.NewMemoryStorage)
+
+var txLogSet = wire.NewSet(wire.Value("transaction.log"), logger.NewFileTransactionLogger)
+
+// Провайдер для создания App структуры
+func NewApp(
+	healthAPI *healthcheck.API,
+	keyAPI *key.API,
+	txLogger transactions.ITransactionLogger,
+) *App {
+	return &App{
+		HealthcheckAPI:    healthAPI,
+		KeyAPI:            keyAPI,
+		TransactionLogger: txLogger,
+	}
+}
+
+var appSet = wire.NewSet(
+	NewApp,
+)

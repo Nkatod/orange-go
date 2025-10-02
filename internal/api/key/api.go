@@ -8,14 +8,16 @@ import (
 
 	"orange-go/internal/model"
 	"orange-go/internal/storage"
+	"orange-go/internal/transactions"
 )
 
 type API struct {
 	memoryStorage storage.IMemoryStorage
+	tlog          transactions.ITransactionLogger
 }
 
-func NewAPI(e *echo.Echo, memoryStorage storage.IMemoryStorage) *API {
-	api := &API{memoryStorage: memoryStorage}
+func NewAPI(e *echo.Echo, memoryStorage storage.IMemoryStorage, tlog transactions.ITransactionLogger) *API {
+	api := &API{memoryStorage: memoryStorage, tlog: tlog}
 
 	g := e.Group("/v1/key")
 	g.PUT("/:key", api.KeyValuePutHandler)
@@ -56,6 +58,8 @@ func (api *API) KeyValuePutHandler(c echo.Context) error {
 			Error: model.NewErr("storage_put_failed", "failed to store value", err.Error()),
 		})
 	}
+
+	api.tlog.WritePut(key, string(valueBytes))
 
 	return c.JSON(http.StatusCreated, KeyValuePutResponse{
 		Data: &KeyValuePutData{
