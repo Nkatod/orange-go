@@ -1,21 +1,27 @@
 package memory
 
-var Store = make(map[string]string)
+type Storage struct {
+	Store map[string]string
+}
 
-func Put(key string, value string) error {
-	Store[key] = value
+func NewMemoryStorage() *Storage {
+	return &Storage{Store: make(map[string]string)}
+}
+
+func (m *Storage) Put(key, value string) error {
+	m.Store[key] = value
 	return nil
 }
 
-func Get(key string) (string, error) {
-	value, ok := Store[key]
+func (m *Storage) Get(key string) (string, error) {
+	value, ok := m.Store[key]
 	if !ok {
 		return "", ErrorNoSuchKey
 	}
 	return value, nil
 }
 
-func Delete(key string) error {
-	delete(Store, key)
+func (m *Storage) Delete(key string) error {
+	delete(m.Store, key)
 	return nil
 }
